@@ -521,41 +521,6 @@ bool FITSView::saveImage(const QString &newFilename)
     return m_ImageData->saveImage(newFilename);
 }
 
-bool FITSView::rescale(FITSZoom type)
-{
-    switch (m_ImageData->dataType())
-    {
-        case TBYTE:
-            return rescale<uint8_t>(type);
-
-        case TSHORT:
-            return rescale<int16_t>(type);
-
-        case TUSHORT:
-            return rescale<uint16_t>(type);
-
-        case TLONG:
-            return rescale<int32_t>(type);
-
-        case TULONG:
-            return rescale<uint32_t>(type);
-
-        case TFLOAT:
-            return rescale<float>(type);
-
-        case TLONGLONG:
-            return rescale<int64_t>(type);
-
-        case TDOUBLE:
-            return rescale<double>(type);
-
-        default:
-            break;
-    }
-
-    return false;
-}
-
 FITSView::CursorMode FITSView::getCursorMode()
 {
     return cursorMode;
@@ -595,7 +560,6 @@ void FITSView::leaveEvent(QEvent * event)
     }
 }
 
-template <typename T>
 bool FITSView::rescale(FITSZoom type)
 {
     if (!m_ImageData)
@@ -1378,28 +1342,12 @@ void FITSView::drawEQGrid(QPainter * painter, double scale)
 
     if (m_ImageData->hasWCS() && m_ImageData->fullWCS())
     {
-        FITSImage::wcs_point * wcs_coord = m_ImageData->getWCSCoord();
-        if (wcs_coord != nullptr)
-        {
-            const int size      = image_width * image_height;
-            double maxRA  = -1000;
-            double minRA  = 1000;
-            double maxDec = -1000;
-            double minDec = 1000;
+        double maxRA  = -1000;
+        double minRA  = 1000;
+        double maxDec = -1000;
+        double minDec = 1000;
+        m_ImageData->findWCSBounds(minRA, maxRA, minDec, maxDec);
 
-            for (int i = 0; i < (size); i++)
-            {
-                double ra  = wcs_coord[i].ra;
-                double dec = wcs_coord[i].dec;
-                if (ra > maxRA)
-                    maxRA = ra;
-                if (ra < minRA)
-                    minRA = ra;
-                if (dec > maxDec)
-                    maxDec = dec;
-                if (dec < minDec)
-                    minDec = dec;
-            }
             auto minDecMinutes = (int)(minDec * 12); //This will force the Dec Scale to 5 arc minutes in the loop
             auto maxDecMinutes = (int)(maxDec * 12);
 
@@ -1549,7 +1497,6 @@ void FITSView::drawEQGrid(QPainter * painter, double scale)
                                       i18nc("South Celestial Pole", "SCP"));
                 }
             }
-        }
     }
 }
 

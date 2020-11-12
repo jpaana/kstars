@@ -61,7 +61,6 @@ class PHD2 : public GuideInterface
             Alert,
             GuideParamChange,
             ConfigurationChange
-
         };
         enum PHD2State
         {

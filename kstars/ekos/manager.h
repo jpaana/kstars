@@ -78,7 +78,7 @@ class KPageWidgetItem;
 namespace Ekos
 {
 
-class Manager : public QDialog, public Ui::Manager
+class Manager : public QWidget, public Ui::Manager
 {
         Q_OBJECT
         Q_CLASSINFO("D-Bus Interface", "org.kde.kstars.Ekos")

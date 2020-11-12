@@ -71,7 +71,7 @@ void Manager::release()
     delete _Manager;
 }
 
-Manager::Manager(QWidget * parent) : QDialog(parent)
+Manager::Manager(QWidget * parent) : QWidget(parent, Qt::Window)
 {
 #ifdef Q_OS_OSX
 

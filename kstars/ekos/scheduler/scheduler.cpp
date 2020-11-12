@@ -1429,17 +1429,17 @@ void Scheduler::stop()
 
         startupState = STARTUP_IDLE;
     }
-    // Reset startup state to unparking phase (dome -> mount -> cap)
+    // Reset startup state to unparking phase (cap -> mount -> dome)
     // We do not want to run the startup script again but unparking should be checked
     // whenever the scheduler is running again.
     else if (startupState == STARTUP_COMPLETE)
     {
-        if (unparkDomeCheck->isChecked())
-            startupState = STARTUP_UNPARK_DOME;
+        if (uncapCheck->isChecked())
+            startupState = STARTUP_UNPARK_CAP;
         else if (unparkMountCheck->isChecked())
             startupState = STARTUP_UNPARK_MOUNT;
-        else if (uncapCheck->isChecked())
-            startupState = STARTUP_UNPARK_CAP;
+        else if (unparkDomeCheck->isChecked())
+            startupState = STARTUP_UNPARK_DOME;
     }
 
     shutdownState = SHUTDOWN_IDLE;
@@ -2729,13 +2729,13 @@ bool Scheduler::checkINDIState()
         case INDI_PROPERTY_CHECK:
         {
             qCDebug(KSTARS_EKOS_SCHEDULER) << "Checking INDI properties.";
-            // If dome unparking is required then we wait for dome interface
-            if (unparkDomeCheck->isChecked() && m_DomeReady == false)
+            // If cap unparking is required then we wait for cap interface
+            if (uncapCheck->isChecked() && m_CapReady == false)
             {
                 if (currentOperationTime.elapsed() > (30 * 1000))
                 {
                     currentOperationTime.restart();
-                    appendLogText(i18n("Warning: dome device not ready after timeout, attempting to recover..."));
+                    appendLogText(i18n("Warning: cap device not ready after timeout, attempting to recover..."));
                     disconnectINDI();
                     stopEkos();
                 }
@@ -2759,13 +2759,13 @@ bool Scheduler::checkINDIState()
                 return false;
             }
 
-            // If cap unparking is required then we wait for cap interface
-            if (uncapCheck->isChecked() && m_CapReady == false)
+            // If dome unparking is required then we wait for dome interface
+            if (unparkDomeCheck->isChecked() && m_DomeReady == false)
             {
                 if (currentOperationTime.elapsed() > (30 * 1000))
                 {
                     currentOperationTime.restart();
-                    appendLogText(i18n("Warning: cap device not ready after timeout, attempting to recover..."));
+                    appendLogText(i18n("Warning: dome device not ready after timeout, attempting to recover..."));
                     disconnectINDI();
                     stopEkos();
                 }
@@ -2828,7 +2828,7 @@ bool Scheduler::checkStartupState()
                     appendLogText(i18n("Ekos is already started, skipping startup script..."));
 
                 if (currentJob->getLightFramesRequired())
-                    startupState = STARTUP_UNPARK_DOME;
+                    startupState = STARTUP_UNPARK_CAP;
                 else
                     startupState = STARTUP_COMPLETE;
                 return true;
@@ -2848,7 +2848,7 @@ bool Scheduler::checkStartupState()
                 return false;
             }
 
-            startupState = STARTUP_UNPARK_DOME;
+            startupState = STARTUP_UNPARK_CAP;
             return false;
         }
 
@@ -2856,22 +2856,10 @@ bool Scheduler::checkStartupState()
             return false;
 
         case STARTUP_UNPARK_DOME:
-            // If there is no job in case of manual startup procedure,
-            // or if the job requires light frames, let's proceed with
-            // unparking the dome, otherwise startup process is complete.
-            if (currentJob == nullptr || currentJob->getLightFramesRequired())
-            {
-                if (unparkDomeCheck->isEnabled() && unparkDomeCheck->isChecked())
-                    unParkDome();
-                else
-                    startupState = STARTUP_UNPARK_MOUNT;
-            }
+            if (unparkDomeCheck->isEnabled() && unparkDomeCheck->isChecked())
+                unParkDome();
             else
-            {
                 startupState = STARTUP_COMPLETE;
-                return true;
-            }
-
             break;
 
         case STARTUP_UNPARKING_DOME:
@@ -2882,7 +2870,7 @@ bool Scheduler::checkStartupState()
             if (unparkMountCheck->isEnabled() && unparkMountCheck->isChecked())
                 unParkMount();
             else
-                startupState = STARTUP_UNPARK_CAP;
+                startupState = STARTUP_UNPARK_DOME;
             break;
 
         case STARTUP_UNPARKING_MOUNT:
@@ -2890,10 +2878,22 @@ bool Scheduler::checkStartupState()
             break;
 
         case STARTUP_UNPARK_CAP:
-            if (uncapCheck->isEnabled() && uncapCheck->isChecked())
-                unParkCap();
+            // If there is no job in case of manual startup procedure,
+            // or if the job requires light frames, let's proceed with
+            // unparking the cap, otherwise startup process is complete.
+            if (currentJob == nullptr || currentJob->getLightFramesRequired())
+            {
+	        if (uncapCheck->isEnabled() && uncapCheck->isChecked())
+                    unParkCap();
+                else
+                    startupState = STARTUP_UNPARK_MOUNT;
+            }
             else
+            {
                 startupState = STARTUP_COMPLETE;
+                return true;
+            }
+
             break;
 
         case STARTUP_UNPARKING_CAP:
@@ -2955,9 +2955,9 @@ bool Scheduler::checkShutdownState()
             // The following steps require a connection to the INDI server
             if (isINDIConnected())
             {
-                if (capCheck->isEnabled() && capCheck->isChecked())
+                if (parkDomeCheck->isEnabled() && parkDomeCheck->isChecked())
                 {
-                    shutdownState = SHUTDOWN_PARK_CAP;
+                    shutdownState = SHUTDOWN_PARK_DOME;
                     return false;
                 }
 
@@ -2967,9 +2967,9 @@ bool Scheduler::checkShutdownState()
                     return false;
                 }
 
-                if (parkDomeCheck->isEnabled() && parkDomeCheck->isChecked())
+                if (capCheck->isEnabled() && capCheck->isChecked())
                 {
-                    shutdownState = SHUTDOWN_PARK_DOME;
+                    shutdownState = SHUTDOWN_PARK_CAP;
                     return false;
                 }
             }
@@ -2993,7 +2993,7 @@ bool Scheduler::checkShutdownState()
             else if (capCheck->isEnabled() && capCheck->isChecked())
                 parkCap();
             else
-                shutdownState = SHUTDOWN_PARK_MOUNT;
+                shutdownState = SHUTDOWN_SCRIPT;
             break;
 
         case SHUTDOWN_PARKING_CAP:
@@ -3009,7 +3009,7 @@ bool Scheduler::checkShutdownState()
             else if (parkMountCheck->isEnabled() && parkMountCheck->isChecked())
                 parkMount();
             else
-                shutdownState = SHUTDOWN_PARK_DOME;
+                shutdownState = SHUTDOWN_PARK_CAP;
             break;
 
         case SHUTDOWN_PARKING_MOUNT:
@@ -3025,7 +3025,7 @@ bool Scheduler::checkShutdownState()
             else if (parkDomeCheck->isEnabled() && parkDomeCheck->isChecked())
                 parkDome();
             else
-                shutdownState = SHUTDOWN_SCRIPT;
+                shutdownState = SHUTDOWN_PARK_MOUNT;
             break;
 
         case SHUTDOWN_PARKING_DOME:
@@ -5338,7 +5338,7 @@ void Scheduler::parkMount()
     {
         case ISD::PARK_PARKED:
             if (shutdownState == SHUTDOWN_PARK_MOUNT)
-                shutdownState = SHUTDOWN_PARK_DOME;
+                shutdownState = SHUTDOWN_PARK_CAP;
 
             parkWaitState = PARKWAIT_PARKED;
             appendLogText(i18n("Mount already parked."));
@@ -5404,7 +5404,7 @@ void Scheduler::unParkMount()
         //case Mount::UNPARKING_OK:
         case ISD::PARK_UNPARKED:
             if (startupState == STARTUP_UNPARK_MOUNT)
-                startupState = STARTUP_UNPARK_CAP;
+                startupState = STARTUP_UNPARK_DOME;
 
             parkWaitState = PARKWAIT_UNPARKED;
             appendLogText(i18n("Mount already unparked."));
@@ -5475,7 +5475,7 @@ void Scheduler::checkMountParkingStatus()
             // If we are starting up, we will unpark the mount in checkParkWaitState soon
             // If we are shutting down and mount is parked, proceed to next step
             if (shutdownState == SHUTDOWN_PARKING_MOUNT)
-                shutdownState = SHUTDOWN_PARK_DOME;
+                shutdownState = SHUTDOWN_PARK_CAP;
 
             // Update parking engine state
             if (parkWaitState == PARKWAIT_PARKING)
@@ -5490,7 +5490,7 @@ void Scheduler::checkMountParkingStatus()
             // If we are starting up and mount is unparked, proceed to next step
             // If we are shutting down, we will park the mount in checkParkWaitState soon
             if (startupState == STARTUP_UNPARKING_MOUNT)
-                startupState = STARTUP_UNPARK_CAP;
+                startupState = STARTUP_UNPARK_DOME;
 
             // Update parking engine state
             if (parkWaitState == PARKWAIT_UNPARKING)
@@ -5585,11 +5585,11 @@ void Scheduler::checkMountParkingStatus()
         case ISD::PARK_UNKNOWN:
             // Last parking action did not result in an action, so proceed to next step
             if (shutdownState == SHUTDOWN_PARKING_MOUNT)
-                shutdownState = SHUTDOWN_PARK_DOME;
+                shutdownState = SHUTDOWN_PARK_CAP;
 
             // Last unparking action did not result in an action, so proceed to next step
             if (startupState == STARTUP_UNPARKING_MOUNT)
-                startupState = STARTUP_UNPARK_CAP;
+                startupState = STARTUP_UNPARK_DOME;
 
             // Update parking engine state
             if (parkWaitState == PARKWAIT_PARKING)
@@ -5683,7 +5683,7 @@ void Scheduler::parkDome()
     else
     {
         appendLogText(i18n("Dome already parked."));
-        shutdownState = SHUTDOWN_SCRIPT;
+        shutdownState = SHUTDOWN_PARK_MOUNT;
     }
 }
 
@@ -5713,7 +5713,7 @@ void Scheduler::unParkDome()
     else
     {
         appendLogText(i18n("Dome already unparked."));
-        startupState = STARTUP_UNPARK_MOUNT;
+        startupState = STARTUP_COMPLETE;
     }
 }
 
@@ -5743,8 +5743,8 @@ void Scheduler::checkDomeParkingStatus()
             if (shutdownState == SHUTDOWN_PARKING_DOME)
             {
                 appendLogText(i18n("Dome parked."));
+                shutdownState = SHUTDOWN_PARK_MOUNT;
 
-                shutdownState = SHUTDOWN_SCRIPT;
             }
             parkingFailureCount = 0;
             break;
@@ -5752,7 +5752,7 @@ void Scheduler::checkDomeParkingStatus()
         case ISD::PARK_UNPARKED:
             if (startupState == STARTUP_UNPARKING_DOME)
             {
-                startupState = STARTUP_UNPARK_MOUNT;
+                startupState = STARTUP_COMPLETE;
                 appendLogText(i18n("Dome unparked."));
             }
             parkingFailureCount = 0;
@@ -5859,7 +5859,7 @@ void Scheduler::parkCap()
     else
     {
         appendLogText(i18n("Cap already parked."));
-        shutdownState = SHUTDOWN_PARK_MOUNT;
+        shutdownState = SHUTDOWN_SCRIPT;
     }
 }
 
@@ -5891,7 +5891,7 @@ void Scheduler::unParkCap()
     else
     {
         appendLogText(i18n("Cap already unparked."));
-        startupState = STARTUP_COMPLETE;
+        startupState = STARTUP_UNPARK_MOUNT;
     }
 }
 
@@ -5921,7 +5921,7 @@ void Scheduler::checkCapParkingStatus()
             if (shutdownState == SHUTDOWN_PARKING_CAP)
             {
                 appendLogText(i18n("Cap parked."));
-                shutdownState = SHUTDOWN_PARK_MOUNT;
+                shutdownState = SHUTDOWN_SCRIPT;
             }
             parkingFailureCount = 0;
             break;
@@ -5929,7 +5929,7 @@ void Scheduler::checkCapParkingStatus()
         case ISD::PARK_UNPARKED:
             if (startupState == STARTUP_UNPARKING_CAP)
             {
-                startupState = STARTUP_COMPLETE;
+                startupState = STARTUP_UNPARK_MOUNT;
                 appendLogText(i18n("Cap unparked."));
             }
             parkingFailureCount = 0;
@@ -6542,7 +6542,7 @@ int Scheduler::getCompletedFiles(const QString &path, const QString &seqPrefix)
 
         if (fileName.startsWith(seqPrefix))
         {
-            qCDebug(KSTARS_EKOS_SCHEDULER) << QString("> Found '%1'").arg(fileName);
+            //qCDebug(KSTARS_EKOS_SCHEDULER) << QString("> Found '%1'").arg(fileName);
             seqFileCount++;
         }
     }
